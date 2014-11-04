@@ -136,10 +136,12 @@ class ILP(object):
       for i in range(vsm_matrix.number_of_columns):
         for j in range(oracle_matrix.number_of_columns):
           # alignment variables Xij: Xij==1 iff Di aligned to Sj
-          Xij = "X_"+str(i)+"_"+str(j) 
-          Xij = self.model.addVar(vtype=GRB.BINARY, name=Xij) 
+          Xij_str = "X_"+str(i)+"_"+str(j) 
+          Xij = self.model.addVar(vtype=GRB.BINARY, name=Xij_str) 
           Dij = Similarity(vsm_matrix.Column(i, vocabulary), 
                            oracle_matrix.Column(j, vocabulary), distance_metric)
+          if args.verbose:
+            print("METRIC:{}\t{}\t{}".format(distance_metric, Xij_str, Dij))
           objective += Dij * Xij
       print("Variables created")
       # Integrate new variables
