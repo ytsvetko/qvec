@@ -12,6 +12,7 @@ from gurobipy import *
 from scipy.stats.stats import pearsonr 
 from scipy import spatial
 import timeit
+import gzip
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--in_vectors", default="../data/en-svd-de-64.txt")
@@ -75,13 +76,21 @@ class OracleMatrix(Matrix):
 class VectorMatrix(Matrix):
   def AddMatrix(self, filename):
     #filename format: biennials -0.11809 0.089522 -0.026722 0.075579 -0.02453
-    for line in open(filename):
-      tokens = line.split()
+    binary_file = False
+    if filename.endswith(".gz"):
+      filename = gzip.open(filename, "rb")
+      binary_file = True
+    else:
+      filename = open(filename)
+    for line in filename:
+      tokens = line.strip().split()
       word = tokens[0]
+      if binary_file: 
+        word = word.decode("utf-8")
       self.vocab.add(word)
       features = {}
       for dim, val in enumerate(tokens[1:]):
-        features[dim] = float(val)
+        features[dim] = float(val) + 1e-6
       self.matrix[word] = features
       self.number_of_columns = len(tokens)-1
       
