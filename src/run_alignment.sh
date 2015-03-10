@@ -1,40 +1,35 @@
 #!/bin/bash
 
-
 function get_alignments {
-  MODEL_NUM=$1
+  VECTORS=$1
   ORACLE_MATRIX=$2
   POS=$3
   DISTANCE_METRIC=$4
-  OPTIMIZATION_DIRECTION=$5
+  DISTANCE_METRIC_THRESHOLD=$5
+  OPTIMIZATION_DIRECTION=$6
   
-  MODEL_DIR=../data/${MODEL_NUM}"thModel"
-  OUT_DIR=../work/${MODEL_NUM}"thModel"/${POS}"-"${DISTANCE_METRIC}"-"${OPTIMIZATION_DIRECTION}
-
+  OUT_DIR=../work-acl-15/`basename ${VECTORS}`
+  OUT_FILE=${OUT_DIR}/`basename ${ORACLE_MATRIX}`"-"${DISTANCE_METRIC}
+  
   mkdir -p ${OUT_DIR}
-  
-  for f in ${MODEL_DIR}/*.txt ; do
-    echo `basename $f`    
-    echo ${OUT_DIR}/`basename $f`
-    nice -n 2 ./interpret.py --in_vectors $f \
+  nice -n 2 ./interpret.py --in_vectors ${VECTORS} \
       --interpretations ${ORACLE_MATRIX} \
-      --out_file ${OUT_DIR}/`basename $f` \
+      --out_file ${OUT_FILE} \
       --distance_metric ${DISTANCE_METRIC} \
+      --distance_metric_threshold ${DISTANCE_METRIC_THRESHOLD} \
       --optimization_direction ${OPTIMIZATION_DIRECTION} \
-      --verbose > ${OUT_DIR}/`basename $f`".log" &
-  done  
+      --verbose 2>&1 | tee ${OUT_FILE}".log" #&
 }
 
-MODEL_NUM=( 5 8 )
-POS=( "noun" "verb" "adj" )
+THRESHOLD=0.1
 
-for model_num in "${MODEL_NUM[@]}" ; do
-  for pos in "${POS[@]}" ; do
-    oracle_matrix="../data/supersenses/wn_"${pos}".supersneses"
-    get_alignments ${model_num} ${oracle_matrix} ${pos} correlation MAXIMIZE
-    get_alignments ${model_num} ${oracle_matrix} ${pos} abs_correlation MAXIMIZE
-    get_alignments ${model_num} ${oracle_matrix} ${pos} cosine MINIMIZE
-    get_alignments ${model_num} ${oracle_matrix} ${pos} heuristic1 MINIMIZE
+VECTORS=/usr0/home/ytsvetko/projects/ivsm/data/vectors
+ORACLES=/usr0/home/ytsvetko/projects/ivsm/data/oracles
+for model_name in ${VECTORS}/* ; do
+  echo ${model_name}
+  for oracle_matrix in ${ORACLES}/* ; do
+    pos="noun_verb"
+    get_alignments ${model_name} ${oracle_matrix} ${pos} abs_correlation ${THRESHOLD} MAXIMIZE
   done
 done
 
