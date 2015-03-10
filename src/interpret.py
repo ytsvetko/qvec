@@ -13,12 +13,16 @@ from scipy.stats.stats import pearsonr
 from scipy import spatial
 import timeit
 import gzip
+import sys
+import random
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--in_vectors", default="../data/en-svd-de-64.txt")
 parser.add_argument("--interpretations", nargs='+', default="../data/supersenses/wn_noun.supersneses")
 parser.add_argument("--out_file", default="model.sol")
-parser.add_argument("--distance_metric", default="correlation", help="correlation, abs_correlation, cosine, heuristic1")
+parser.add_argument("--distance_metric", default="abs_correlation", help="correlation, abs_correlation, cosine, heuristic1")
+parser.add_argument("--distance_metric_threshold", type=float, default=0.1, help="minimal distance")
+parser.add_argument("--auto_threshold", action='store_true')
 parser.add_argument("--optimization_direction", default="MAXIMIZE", help="MAXIMIZE, MINIMIZE")
 parser.add_argument("--verbose", action='store_true')
 args = parser.parse_args()
@@ -118,6 +122,48 @@ def Similarity(v1, v2, metric="correlation"):
       result += abs(i-j)
     return 1 - result
   
+def Threshold(similarity_matrix, sample_size=0.75, num_resamples=10000, confidence_interval=0.95):
+  #TODO
+  """
+  def sample_matrix():
+    matrix = {}
+    
+  def get_threshold(matrix):
+    return 0.0
+    
+  threshold = 0.0
+  thresholds = []
+  for i in range(num_resamples):
+    sample = sample_matrix()
+    local_threshold = get_threshold(sample)
+    thresholds.append(local_threshold)
+  thresholds.sort()
+  if args.verbose:
+    print("THRESHOLD:", threshold)
+  return threshold
+  """
+  pass
+  
+def SimilarityMatrix(vsm_matrix, oracle_matrix, distance_metric="correlation", 
+                    optimization_direction=GRB.MAXIMIZE):
+  similarity_matrix = {}
+  vocabulary = vsm_matrix.vocab & oracle_matrix.vocab
+  for i in range(vsm_matrix.number_of_columns):
+    for j in range(oracle_matrix.number_of_columns):      
+      similarity_matrix[i,j] = Similarity(vsm_matrix.Column(i, vocabulary), 
+               oracle_matrix.Column(j, vocabulary), distance_metric)      
+
+  threshold = args.distance_metric_threshold
+  if args.auto_threshold:
+    threshold = Threshold(similarity_matrix)  
+    
+  for i in range(vsm_matrix.number_of_columns):
+    for j in range(oracle_matrix.number_of_columns):      
+      if similarity_matrix[i,j] < threshold:
+        similarity_matrix[i,j] = 0.0
+
+  return similarity_matrix
+
 class ILP(object):
   """
    This class formulates and solves the following simple ILP model:
@@ -134,8 +180,7 @@ class ILP(object):
 
     Xij binary
   """
-  def CreateModel(self, vsm_matrix, oracle_matrix, vocabulary, 
-                        distance_metric="correlation", optimization_direction=GRB.MAXIMIZE):
+  def CreateModel(self, vsm_matrix, oracle_matrix, similarity_matrix, optimization_direction):
     try:
       # Create a new model
       self.model = Model("ilp")
@@ -147,28 +192,39 @@ class ILP(object):
           # alignment variables Xij: Xij==1 iff Di aligned to Sj
           Xij_str = "X_"+str(i)+"_"+str(j) 
           Xij = self.model.addVar(vtype=GRB.BINARY, name=Xij_str) 
-          Dij = Similarity(vsm_matrix.Column(i, vocabulary), 
-                           oracle_matrix.Column(j, vocabulary), distance_metric)
+          Dij = similarity_matrix[i,j]
           if args.verbose:
-            print("METRIC:{}\t{}\t{}".format(distance_metric, Xij_str, Dij))
+            print("METRIC:{}\t{}\t{}".format(args.distance_metric, Xij_str, Dij))
           objective += Dij * Xij
+
       print("Variables created")
       # Integrate new variables
       self.model.update()
       print("Model updated")
+
       # Set objective
       self.model.setObjective(objective, optimization_direction)
+      
       # Add constraints: 
+      #"""
       # For all i sum(Xj) <= 1 (enforce many-to-one_supersense alignment)
       for i in range(vsm_matrix.number_of_columns):
         Xj = LinExpr()
         for j in range(oracle_matrix.number_of_columns):
-          Xij = self.model.getVarByName("X_"+str(i)+"_"+str(j) )
-          Xj += Xij
-        self.model.addConstr(Xj <= 1, "c"+str(i))
+          Xj += self.model.getVarByName("X_"+str(i)+"_"+str(j) )
+        self.model.addConstr(Xj <= 1)
+      #"""
+      # For all j sum(Xi) <= 5 (at most 5 vector dimensions are aligned to one supersense)
+      #"""
+      for j in range(oracle_matrix.number_of_columns):
+        Xi = LinExpr()
+        for i in range(vsm_matrix.number_of_columns):
+          Xi += self.model.getVarByName("X_"+str(i)+"_"+str(j))
+        self.model.addConstr(Xi <= 10)
+      #"""  
     except GurobiError:
-      print('Gurobi Error')
-
+      print('Gurobi Error', GurobiError.value)
+      sys.exit(1)
  
 def main():
   oracle_matrix = OracleMatrix()
@@ -179,8 +235,8 @@ def main():
   vsm_matrix = VectorMatrix()
   print("Loading VSM file:", args.in_vectors)
   vsm_matrix.AddMatrix(args.in_vectors)
-  #Debug(oracle_matrix, 7, vsm_matrix, 3)
-  
+  #Debug(oracle_matrix, 7, vsm_matrix, 3)  
+
   start = timeit.timeit()
   ilp = ILP()
   distance_metric = args.distance_metric
@@ -188,10 +244,11 @@ def main():
     optimization_direction = GRB.MAXIMIZE  
   else: 
     optimization_direction = GRB.MINIMIZE
-  ilp.CreateModel(vsm_matrix, oracle_matrix, 
-                  vsm_matrix.vocab & oracle_matrix.vocab, 
-                  distance_metric=distance_metric, 
-                  optimization_direction=optimization_direction)
+
+  similarity_matrix = SimilarityMatrix(vsm_matrix, oracle_matrix, 
+                     distance_metric=distance_metric, 
+                     optimization_direction=optimization_direction)
+  ilp.CreateModel(vsm_matrix, oracle_matrix, similarity_matrix, optimization_direction)
 
   ilp.model.optimize()
   if args.verbose:
@@ -216,7 +273,7 @@ def main():
     print("Computation time: ", end - start)
     exit(0)
   elif ilp.model.status != GRB.status.INFEASIBLE:
-    print("Optimization was stopped with status %d" % model.status)
+    print("Optimization was stopped with status %d" % ilp.model.status)
     print("Computation time: ", end - start)
     exit(0)
   # Model is infeasible - compute an Irreducible Infeasible Subsystem (IIS)
