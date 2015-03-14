@@ -20,18 +20,19 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--in_vectors", default="../data/en-svd-de-64.txt")
 parser.add_argument("--interpretations", nargs='+', default="../data/supersenses/wn_noun.supersneses")
 parser.add_argument("--out_file", default="model.sol")
-parser.add_argument("--distance_metric", default="abs_correlation", help="correlation, abs_correlation, cosine, heuristic1")
-parser.add_argument("--distance_metric_threshold", type=float, default=0.1, help="minimal distance")
-parser.add_argument("--auto_threshold", action='store_true')
+parser.add_argument("--distance_metric", default="abs_correlation",
+                    help="correlation, abs_correlation, cosine, heuristic1")
+parser.add_argument("--lambda", type=float, default=0.0, help="regularization strength")
+parser.add_argument("--tune_lambda", action='store_true')
+parser.add_argument("--held_out_fraction", type=float, default=0.1)
 parser.add_argument("--optimization_direction", default="MAXIMIZE", help="MAXIMIZE, MINIMIZE")
 parser.add_argument("--verbose", action='store_true')
+parser.add_argument("--seed", default=86542, type=int, help="Random seed")
 args = parser.parse_args()
-
 
 class Matrix(object):
   def __init__(self):
     self.matrix = {} #key - word; value = dict with key - column num, value - val
-    self.vocab = set()
     self.number_of_columns = 0
 
   def Column(self, dim, vocab):
@@ -43,7 +44,7 @@ class Matrix(object):
 
   def __repr__(self):
     result = []
-    for word in sorted(self.vocab):
+    for word in sorted(self.matrix):
       line = [word]
       features = self.matrix[word]
       for col in range(self.number_of_columns):
@@ -51,6 +52,16 @@ class Matrix(object):
       result.append(" ".join(line))
     return "\n".join(result)
     
+  def HeldOut(self, fraction=0.1):
+    test = Matrix()
+    test_vocab = set(random.sample(sorted(self.matrix), len(self.matrix) * fraction))
+    for word in test_vocab:
+      test_vocab.matrix[word] = self.matrix[word]
+      del self.matrix[word]
+    test.number_of_columns = self.number_of_columns
+    return test
+
+
 class OracleMatrix(Matrix):
   def __init__(self):
     super().__init__()
@@ -60,7 +71,6 @@ class OracleMatrix(Matrix):
     #filename format: headache  {"WN_noun.cognition": 0.5, "WN_noun.state": 0.5}
     for line in open(filename):
       word, json_line = line.strip().split("\t")
-      self.vocab.add(word)
       json_features = json.loads(json_line)
       features = {}  
       if word in self.matrix: 
@@ -76,28 +86,35 @@ class OracleMatrix(Matrix):
         features[column_num] = feature_val
       self.matrix[word] = features
 
-      
+
+def NormalizeMatrix(matrix):
+  for word, features in matrix.items():
+    min_val = min(features.values())
+    max_val = max(features.values())
+    matrix[word] = {dim: (val-min_val)/(max_val-min_val) for (dim, val) in features.items()}
+
+
 class VectorMatrix(Matrix):
   def AddMatrix(self, filename):
     #filename format: biennials -0.11809 0.089522 -0.026722 0.075579 -0.02453
     binary_file = False
     if filename.endswith(".gz"):
-      filename = gzip.open(filename, "rb")
+      f = gzip.open(filename, "rb")
       binary_file = True
     else:
-      filename = open(filename)
-    for line in filename:
+      f = open(filename)
+    for line in f:
       tokens = line.strip().split()
       word = tokens[0]
       if binary_file: 
         word = word.decode("utf-8")
-      self.vocab.add(word)
       features = {}
       for dim, val in enumerate(tokens[1:]):
-        features[dim] = float(val) + 1e-6
+        features[dim] = float(val) # + 1e-6
+
       self.matrix[word] = features
       self.number_of_columns = len(tokens)-1
-      
+    NormalizeMatrix(self.matrix)
 
 def Similarity(v1, v2, metric="correlation"):
   def IsZero(v):
@@ -122,7 +139,7 @@ def Similarity(v1, v2, metric="correlation"):
       result += abs(i-j)
     return 1 - result
   
-def Threshold(similarity_matrix, sample_size=0.75, num_resamples=10000, confidence_interval=0.95):
+def TuneLambda(similarity_matrix):
   #TODO
   """
   def sample_matrix():
@@ -144,24 +161,14 @@ def Threshold(similarity_matrix, sample_size=0.75, num_resamples=10000, confiden
   """
   pass
   
-def SimilarityMatrix(vsm_matrix, oracle_matrix, distance_metric="correlation", 
-                    optimization_direction=GRB.MAXIMIZE):
+def SimilarityMatrix(vsm_matrix, oracle_matrix, distance_metric="correlation"):
   similarity_matrix = {}
-  vocabulary = vsm_matrix.vocab & oracle_matrix.vocab
+  vocabulary = vsm_matrix.matrix.keys() & oracle_matrix.matrix.keys()
   for i in range(vsm_matrix.number_of_columns):
     for j in range(oracle_matrix.number_of_columns):      
       similarity_matrix[i,j] = Similarity(vsm_matrix.Column(i, vocabulary), 
                oracle_matrix.Column(j, vocabulary), distance_metric)      
-
-  threshold = args.distance_metric_threshold
-  if args.auto_threshold:
-    threshold = Threshold(similarity_matrix)  
     
-  for i in range(vsm_matrix.number_of_columns):
-    for j in range(oracle_matrix.number_of_columns):      
-      if similarity_matrix[i,j] < threshold:
-        similarity_matrix[i,j] = 0.0
-
   return similarity_matrix
 
 class ILP(object):
@@ -180,19 +187,19 @@ class ILP(object):
 
     Xij binary
   """
-  def CreateModel(self, vsm_matrix, oracle_matrix, similarity_matrix, optimization_direction):
+  def CreateModel(self, num_vsm_columns, num_oracle_columns, similarity_matrix, optimization_direction, _lambda_):
     try:
       # Create a new model
       self.model = Model("ilp")
   
       # Create VSM dim * Oracle dim variables
       objective = LinExpr()
-      for i in range(vsm_matrix.number_of_columns):
-        for j in range(oracle_matrix.number_of_columns):
+      for i in range(num_vsm_columns):
+        for j in range(num_oracle_columns):
           # alignment variables Xij: Xij==1 iff Di aligned to Sj
           Xij_str = "X_"+str(i)+"_"+str(j) 
           Xij = self.model.addVar(vtype=GRB.BINARY, name=Xij_str) 
-          Dij = similarity_matrix[i,j]
+          Dij = similarity_matrix[i,j]  - _lambda_
           if args.verbose:
             print("METRIC:{}\t{}\t{}".format(args.distance_metric, Xij_str, Dij))
           objective += Dij * Xij
@@ -208,25 +215,34 @@ class ILP(object):
       # Add constraints: 
       #"""
       # For all i sum(Xj) <= 1 (enforce many-to-one_supersense alignment)
-      for i in range(vsm_matrix.number_of_columns):
+      for i in range(num_vsm_columns):
         Xj = LinExpr()
-        for j in range(oracle_matrix.number_of_columns):
+        for j in range(num_oracle_columns):
           Xj += self.model.getVarByName("X_"+str(i)+"_"+str(j) )
         self.model.addConstr(Xj <= 1)
       #"""
       # For all j sum(Xi) <= 5 (at most 5 vector dimensions are aligned to one supersense)
-      #"""
-      for j in range(oracle_matrix.number_of_columns):
+      """
+      for j in range(num_oracle_columns):
         Xi = LinExpr()
-        for i in range(vsm_matrix.number_of_columns):
+        for i in range(num_vsm_columns):
           Xi += self.model.getVarByName("X_"+str(i)+"_"+str(j))
         self.model.addConstr(Xi <= 10)
       #"""  
     except GurobiError:
       print('Gurobi Error', GurobiError.value)
       sys.exit(1)
- 
+
+  def CalcObjective(self, num_vsm_columns, num_oracle_columns, similarity_matrix, _lambda_):
+    result = 0.0
+    for i in range(num_vsm_columns):
+      for j in range(num_oracle_columns):
+        Xij = self.model.getVarByName("X_"+str(i)+"_"+str(j))
+        result += (similarity_matrix[i,j] - _lambda_) * Xij.x
+    return result
+
 def main():
+  random.seed(args.seed)
   oracle_matrix = OracleMatrix()
   for filename in args.interpretations: #.split():
     print("Loading oracle matrix:", filename)
@@ -237,6 +253,10 @@ def main():
   vsm_matrix.AddMatrix(args.in_vectors)
   #Debug(oracle_matrix, 7, vsm_matrix, 3)  
 
+  _lambda_ = args.lambda
+  if args.tune_lambda:
+    _lambda_ = TuneLambda(similarity_matrix) 
+    
   start = timeit.timeit()
   ilp = ILP()
   distance_metric = args.distance_metric
@@ -246,16 +266,16 @@ def main():
     optimization_direction = GRB.MINIMIZE
 
   similarity_matrix = SimilarityMatrix(vsm_matrix, oracle_matrix, 
-                     distance_metric=distance_metric, 
-                     optimization_direction=optimization_direction)
-  ilp.CreateModel(vsm_matrix, oracle_matrix, similarity_matrix, optimization_direction)
+                                       distance_metric=distance_metric)
+  ilp.CreateModel(vsm_matrix.number_of_columns, oracle_matrix.number_of_columns,
+                  similarity_matrix, optimization_direction, _lambda_)
 
   ilp.model.optimize()
   if args.verbose:
     print("DISTANCE METRIC:", distance_metric)
     print("OPTIMIZATION DIRECTION:", args.optimization_direction)
     print("VOCABULARY:")
-    for w in sorted(vsm_matrix.vocab & oracle_matrix.vocab):
+    for w in sorted(vsm_matrix.matrix.keys() & oracle_matrix.matrix.keys()):
       print("    ", w)
     print("\n\n")
     print("OPTIMAL SOLUTION:")
@@ -268,6 +288,9 @@ def main():
     ilp.model.optimize()
   if ilp.model.status == GRB.status.OPTIMAL:
     print("Optimal objective: %g" % ilp.model.objVal)
+    print("Our calculation of objective:",
+          ilp.CalcObjective(vsm_matrix.number_of_columns, oracle_matrix.number_of_columns,
+                            similarity_matrix))
     ilp.model.write(args.out_file + ".sol")
     end = timeit.timeit()
     print("Computation time: ", end - start)
