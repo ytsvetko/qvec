@@ -22,7 +22,7 @@ parser.add_argument("--interpretations", nargs='+', default="../data/supersenses
 parser.add_argument("--out_file", default="model.sol")
 parser.add_argument("--distance_metric", default="abs_correlation",
                     help="correlation, abs_correlation, cosine, heuristic1")
-parser.add_argument("--lambda", type=float, default=0.0, help="regularization strength")
+parser.add_argument("--_lambda_", type=float, default=0.0, help="regularization strength")
 parser.add_argument("--tune_lambda", action='store_true')
 parser.add_argument("--held_out_fraction", type=float, default=0.1)
 parser.add_argument("--optimization_direction", default="MAXIMIZE", help="MAXIMIZE, MINIMIZE")
@@ -253,7 +253,7 @@ def main():
   vsm_matrix.AddMatrix(args.in_vectors)
   #Debug(oracle_matrix, 7, vsm_matrix, 3)  
 
-  _lambda_ = args.lambda
+  _lambda_ = args._lambda_
   if args.tune_lambda:
     _lambda_ = TuneLambda(similarity_matrix) 
     
