@@ -16,7 +16,7 @@ function get_alignments {
       --interpretations ${ORACLE_MATRIX} \
       --out_file ${OUT_FILE} \
       --distance_metric ${DISTANCE_METRIC} \
-      --_lambda_ ${LAMBDA} \
+      --regularization_lambda ${LAMBDA} \
       --optimization_direction ${OPTIMIZATION_DIRECTION} \
       --verbose 2>&1 | tee ${OUT_FILE}".log" #&
 }
