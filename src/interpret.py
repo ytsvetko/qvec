@@ -54,12 +54,16 @@ class Matrix(object):
     
   def HeldOut(self, fraction=0.1):
     test = Matrix()
+    train = Matrix()
     test_vocab = set(random.sample(sorted(self.matrix), len(self.matrix) * fraction))
-    for word in test_vocab:
-      test_vocab.matrix[word] = self.matrix[word]
-      del self.matrix[word]
+    for word, features in self.matrix.items():
+      if word in test_vocab:
+        test.matrix[word] = features
+      else:
+        train.matrix[word] = features
     test.number_of_columns = self.number_of_columns
-    return test
+    train.number_of_columns = self.number_of_columns
+    return test, train
 
 
 class OracleMatrix(Matrix):
@@ -139,28 +143,6 @@ def Similarity(v1, v2, metric="correlation"):
       result += abs(i-j)
     return 1 - result
   
-def TuneLambda(similarity_matrix):
-  #TODO
-  """
-  def sample_matrix():
-    matrix = {}
-    
-  def get_threshold(matrix):
-    return 0.0
-    
-  threshold = 0.0
-  thresholds = []
-  for i in range(num_resamples):
-    sample = sample_matrix()
-    local_threshold = get_threshold(sample)
-    thresholds.append(local_threshold)
-  thresholds.sort()
-  if args.verbose:
-    print("THRESHOLD:", threshold)
-  return threshold
-  """
-  pass
-  
 def SimilarityMatrix(vsm_matrix, oracle_matrix, distance_metric="correlation"):
   similarity_matrix = {}
   vocabulary = vsm_matrix.matrix.keys() & oracle_matrix.matrix.keys()
@@ -187,7 +169,7 @@ class ILP(object):
 
     Xij binary
   """
-  def CreateModel(self, num_vsm_columns, num_oracle_columns, similarity_matrix, optimization_direction, _lambda_):
+  def CreateModel(self, num_vsm_columns, num_oracle_columns, similarity_matrix, optimization_direction, regularization_lambda):
     try:
       # Create a new model
       self.model = Model("ilp")
@@ -199,7 +181,7 @@ class ILP(object):
           # alignment variables Xij: Xij==1 iff Di aligned to Sj
           Xij_str = "X_"+str(i)+"_"+str(j) 
           Xij = self.model.addVar(vtype=GRB.BINARY, name=Xij_str) 
-          Dij = similarity_matrix[i,j]  - _lambda_
+          Dij = similarity_matrix[i,j]  - regularization_lambda
           if args.verbose:
             print("METRIC:{}\t{}\t{}".format(args.distance_metric, Xij_str, Dij))
           objective += Dij * Xij
@@ -233,16 +215,56 @@ class ILP(object):
       print('Gurobi Error', GurobiError.value)
       sys.exit(1)
 
-  def CalcObjective(self, num_vsm_columns, num_oracle_columns, similarity_matrix, _lambda_):
+  def CalcObjective(self, num_vsm_columns, num_oracle_columns, similarity_matrix, regularization_lambda):
     result = 0.0
     for i in range(num_vsm_columns):
       for j in range(num_oracle_columns):
         Xij = self.model.getVarByName("X_"+str(i)+"_"+str(j))
-        result += (similarity_matrix[i,j] - _lambda_) * Xij.x
+        result += (similarity_matrix[i,j] - regularization_lambda) * Xij.x
     return result
+
+def RunIlp(vsm_matrix, oracle_matrix, regularization_lambda, 
+           distance_metric, optimization_direction):
+  ilp = ILP()
+  similarity_matrix = SimilarityMatrix(vsm_matrix, oracle_matrix, 
+                                       distance_metric=distance_metric)
+  ilp.CreateModel(vsm_matrix.number_of_columns, oracle_matrix.number_of_columns,
+                  similarity_matrix, optimization_direction, regularization_lambda)
+
+  ilp.model.optimize()
+  if ilp.model.status == GRB.status.INF_OR_UNBD:
+    # Turn presolve off to determine whether model is infeasible
+    # or unbounded
+    ilp.model.setParam(GRB.param.presolve, 0)
+    ilp.model.optimize()
+    
+  return ilp
+
+def TuneLambda(train_matrix, test_matrix, oracle_matrix,
+               distance_metric, optimization_direction):
+  test_similarity_matrix = SimilarityMatrix(test_matrix, oracle_matrix, 
+                                            distance_metric=distance_metric)
+  lambdas = []
+  for regularization_lambda in range(0.01, 0.11, 0.01):
+    print("Calculating for lambda:", regularization_lambda)
+    ilp = RunIlp(train_matrix, oracle_matrix, regularization_lambda, 
+                 distance_metric, optimization_direction)
+    if ilp.model.status == GRB.status.OPTIMAL:
+      test_score = ilp.CalcObjective(
+          test_matrix.number_of_columns, oracle_matrix.number_of_columns,
+          test_similarity_matrix, regularization_lambda)
+      lambdas.append( (test_score, regularization_lambda) )
+  return max(lambdas), lambdas
 
 def main():
   random.seed(args.seed)
+
+  distance_metric = args.distance_metric
+  if args.optimization_direction == "MAXIMIZE":
+    optimization_direction = GRB.MAXIMIZE  
+  else: 
+    optimization_direction = GRB.MINIMIZE
+
   oracle_matrix = OracleMatrix()
   for filename in args.interpretations: #.split():
     print("Loading oracle matrix:", filename)
@@ -253,24 +275,19 @@ def main():
   vsm_matrix.AddMatrix(args.in_vectors)
   #Debug(oracle_matrix, 7, vsm_matrix, 3)  
 
-  _lambda_ = args.regularization_lambda
+  regularization_lambda = args.regularization_lambda
   if args.tune_lambda:
-    _lambda_ = TuneLambda(similarity_matrix) 
-    
+    test_matrix, train_matrix = vsm_matrix.HeldOut(args.held_out_fraction)
+    (max_score, regularization_lambda), all_lambdas = TuneLambda(
+        train_matrix, test_matrix, oracle_matrix, 
+        distance_metric, optimization_direction)
+    print("All lambdas:", all_lambdas)
+    print("Best labda:", regularization_lambda)
+
   start = timeit.timeit()
-  ilp = ILP()
-  distance_metric = args.distance_metric
-  if args.optimization_direction == "MAXIMIZE":
-    optimization_direction = GRB.MAXIMIZE  
-  else: 
-    optimization_direction = GRB.MINIMIZE
+  ilp = RunIlp(vsm_matrix, oracle_matrix, regularization_lambda, 
+               distance_metric, optimization_direction)
 
-  similarity_matrix = SimilarityMatrix(vsm_matrix, oracle_matrix, 
-                                       distance_metric=distance_metric)
-  ilp.CreateModel(vsm_matrix.number_of_columns, oracle_matrix.number_of_columns,
-                  similarity_matrix, optimization_direction, _lambda_)
-
-  ilp.model.optimize()
   if args.verbose:
     print("DISTANCE METRIC:", distance_metric)
     print("OPTIMIZATION DIRECTION:", args.optimization_direction)
@@ -280,33 +297,30 @@ def main():
     print("\n\n")
     print("OPTIMAL SOLUTION:")
     ilp.model.printAttr("X")
-    
-  if ilp.model.status == GRB.status.INF_OR_UNBD:
-    # Turn presolve off to determine whether model is infeasible
-    # or unbounded
-    ilp.model.setParam(GRB.param.presolve, 0)
-    ilp.model.optimize()
+
   if ilp.model.status == GRB.status.OPTIMAL:
     print("Optimal objective: %g" % ilp.model.objVal)
     print("Our calculation of objective:",
           ilp.CalcObjective(vsm_matrix.number_of_columns, oracle_matrix.number_of_columns,
-                            similarity_matrix, _lambda_))
+                            similarity_matrix, regularization_lambda))
     ilp.model.write(args.out_file + ".sol")
-    end = timeit.timeit()
-    print("Computation time: ", end - start)
+    print("Computation time: ", timeit.timeit() - start)
     exit(0)
   elif ilp.model.status != GRB.status.INFEASIBLE:
     print("Optimization was stopped with status %d" % ilp.model.status)
-    print("Computation time: ", end - start)
+    print("Computation time: ", timeit.timeit() - start)
     exit(0)
+
+  """
   # Model is infeasible - compute an Irreducible Infeasible Subsystem (IIS)
   print("")
   print("Model is infeasible")
   ilp.model.computeIIS()
   print("IIS written to file 'model.ilp'")
   ilp.model.write("model.ilp")
-  print("Computation time: ", end - start)
-  
+  print("Computation time: ", timeit.timeit() - start)
+  """
+
   
 def Debug(oracle_matrix, col_oracle, vsm_matrix, col_vsm):
   print("**********ORACLE************")

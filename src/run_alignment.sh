@@ -18,7 +18,7 @@ function get_alignments {
       --distance_metric ${DISTANCE_METRIC} \
       --regularization_lambda ${LAMBDA} \
       --optimization_direction ${OPTIMIZATION_DIRECTION} \
-      --verbose 2>&1 | tee ${OUT_FILE}".log" #&
+      --verbose --tune_lambda 2>&1 | tee ${OUT_FILE}".log" #&
 }
 
 LAMBDA=0.0
