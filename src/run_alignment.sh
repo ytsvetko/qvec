@@ -29,7 +29,7 @@ for model_name in ${VECTORS}/w2v_1b_100.txt* ; do
   echo ${model_name}
   for oracle_matrix in ${ORACLES}/* ; do
     pos="noun_verb"
-    get_alignments ${model_name} ${oracle_matrix} ${pos} abs_correlation ${THRESHOLD} MAXIMIZE
+    get_alignments ${model_name} ${oracle_matrix} ${pos} abs_correlation ${LAMBDA} MAXIMIZE
   done
 done
 

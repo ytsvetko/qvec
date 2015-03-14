@@ -290,7 +290,7 @@ def main():
     print("Optimal objective: %g" % ilp.model.objVal)
     print("Our calculation of objective:",
           ilp.CalcObjective(vsm_matrix.number_of_columns, oracle_matrix.number_of_columns,
-                            similarity_matrix))
+                            similarity_matrix, _lambda_))
     ilp.model.write(args.out_file + ".sol")
     end = timeit.timeit()
     print("Computation time: ", end - start)
