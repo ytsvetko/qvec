@@ -55,7 +55,7 @@ class Matrix(object):
   def HeldOut(self, fraction=0.1):
     test = Matrix()
     train = Matrix()
-    test_vocab = set(random.sample(sorted(self.matrix), len(self.matrix) * fraction))
+    test_vocab = set(random.sample(sorted(self.matrix), round(len(self.matrix) * fraction)))
     for word, features in self.matrix.items():
       if word in test_vocab:
         test.matrix[word] = features
