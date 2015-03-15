@@ -240,12 +240,17 @@ def RunIlp(vsm_matrix, oracle_matrix, regularization_lambda,
     
   return ilp
 
+def frange(x, y, jump):
+  while x < y:
+    yield x
+    x += jump
+
 def TuneLambda(train_matrix, test_matrix, oracle_matrix,
                distance_metric, optimization_direction):
   test_similarity_matrix = SimilarityMatrix(test_matrix, oracle_matrix, 
                                             distance_metric=distance_metric)
   lambdas = []
-  for regularization_lambda in range(0.01, 0.11, 0.01):
+  for regularization_lambda in frange(0.01, 0.11, 0.01):
     print("Calculating for lambda:", regularization_lambda)
     ilp = RunIlp(train_matrix, oracle_matrix, regularization_lambda, 
                  distance_metric, optimization_direction)
