@@ -257,7 +257,7 @@ def TuneLambda(train_matrix, test_matrix, oracle_matrix,
     if ilp.model.status == GRB.status.OPTIMAL:
       test_score = ilp.CalcObjective(
           test_matrix.number_of_columns, oracle_matrix.number_of_columns,
-          test_similarity_matrix, regularization_lambda)
+          test_similarity_matrix, 0.0)
       lambdas.append( (test_score, regularization_lambda) )
   return max(lambdas), lambdas
 
