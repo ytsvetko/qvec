@@ -24,7 +24,7 @@ parser.add_argument("--distance_metric", default="abs_correlation",
                     help="correlation, abs_correlation, cosine, heuristic1")
 parser.add_argument("--regularization_lambda", type=float, default=0.0, help="regularization strength")
 parser.add_argument("--tune_lambda", action='store_true')
-parser.add_argument("--held_out_fraction", type=float, default=0.1)
+parser.add_argument("--held_out_fraction", type=float, default=0.15)
 parser.add_argument("--optimization_direction", default="MAXIMIZE", help="MAXIMIZE, MINIMIZE")
 parser.add_argument("--verbose", action='store_true')
 parser.add_argument("--seed", default=86542, type=int, help="Random seed")
@@ -250,16 +250,22 @@ def TuneLambda(train_matrix, test_matrix, oracle_matrix,
   test_similarity_matrix = SimilarityMatrix(test_matrix, oracle_matrix, 
                                             distance_metric=distance_metric)
   lambdas = []
-  for regularization_lambda in frange(0.01, 0.11, 0.01):
+  max_ilp = None
+  max_score = 0.0
+  
+  for regularization_lambda in frange(0.01, 0.31, 0.01):
     print("Calculating for lambda:", regularization_lambda)
     ilp = RunIlp(train_matrix, oracle_matrix, regularization_lambda, 
                  distance_metric, optimization_direction)
     if ilp.model.status == GRB.status.OPTIMAL:
       test_score = ilp.CalcObjective(
           test_matrix.number_of_columns, oracle_matrix.number_of_columns,
-          test_similarity_matrix, 0.0)
+          test_similarity_matrix, regularization_lambda)
       lambdas.append( (test_score, regularization_lambda) )
-  return max(lambdas), lambdas
+      if test_score > max_score:
+        max_score = test_score
+        max_ilp = ilp
+  return max(lambdas), lambdas, max_ilp
 
 def main():
   random.seed(args.seed)
@@ -283,15 +289,21 @@ def main():
   regularization_lambda = args.regularization_lambda
   if args.tune_lambda:
     test_matrix, train_matrix = vsm_matrix.HeldOut(args.held_out_fraction)
-    (max_score, regularization_lambda), all_lambdas = TuneLambda(
+    (max_score, regularization_lambda), all_lambdas, ilp = TuneLambda(
         train_matrix, test_matrix, oracle_matrix, 
         distance_metric, optimization_direction)
     print("All lambdas:", all_lambdas)
     print("Best labda:", regularization_lambda)
 
-  start = timeit.timeit()
-  ilp = RunIlp(vsm_matrix, oracle_matrix, regularization_lambda, 
-               distance_metric, optimization_direction)
+    start = timeit.timeit()
+    similarity_matrix = SimilarityMatrix(vsm_matrix, oracle_matrix, 
+                                         distance_metric=distance_metric)
+    ilp.CalcObjective(
+        vsm_matrix.number_of_columns, oracle_matrix.number_of_columns,
+        similarity_matrix, regularization_lambda)
+  else:
+    ilp = RunIlp(vsm_matrix, oracle_matrix, regularization_lambda, 
+                 distance_metric, optimization_direction)
 
   if args.verbose:
     print("DISTANCE METRIC:", distance_metric)

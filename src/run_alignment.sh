@@ -25,7 +25,7 @@ LAMBDA=0.0
 
 VECTORS=/usr0/home/ytsvetko/usr3/ivsm/vectors
 ORACLES=/usr0/home/ytsvetko/projects/ivsm/data/oracles
-for model_name in ${VECTORS}/w2v_1b_100.txt* ; do
+for model_name in ${VECTORS}/*.txt ; do
   echo ${model_name}
   for oracle_matrix in ${ORACLES}/* ; do
     pos="noun_verb"
