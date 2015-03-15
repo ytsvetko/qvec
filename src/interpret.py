@@ -304,10 +304,7 @@ def main():
     ilp.model.printAttr("X")
 
   if ilp.model.status == GRB.status.OPTIMAL:
-    print("Optimal objective: %g" % ilp.model.objVal)
-    print("Our calculation of objective:",
-          ilp.CalcObjective(vsm_matrix.number_of_columns, oracle_matrix.number_of_columns,
-                            similarity_matrix, regularization_lambda))
+    print("Optimal objective: %g" % ilp.model.objVal)    
     ilp.model.write(args.out_file + ".sol")
     print("Computation time: ", timeit.timeit() - start)
     exit(0)
