@@ -253,7 +253,7 @@ def TuneLambda(train_matrix, test_matrix, oracle_matrix,
   max_ilp = None
   max_score = 0.0
   
-  for regularization_lambda in frange(0.01, 0.31, 0.01):
+  for regularization_lambda in frange(0.01, 0.21, 0.01):
     print("Calculating for lambda:", regularization_lambda)
     ilp = RunIlp(train_matrix, oracle_matrix, regularization_lambda, 
                  distance_metric, optimization_direction)
@@ -268,6 +268,7 @@ def TuneLambda(train_matrix, test_matrix, oracle_matrix,
   return max(lambdas), lambdas, max_ilp
 
 def main():
+  start = timeit.timeit()
   random.seed(args.seed)
 
   distance_metric = args.distance_metric
@@ -295,12 +296,11 @@ def main():
     print("All lambdas:", all_lambdas)
     print("Best labda:", regularization_lambda)
 
-    start = timeit.timeit()
     similarity_matrix = SimilarityMatrix(vsm_matrix, oracle_matrix, 
                                          distance_metric=distance_metric)
     ilp.CalcObjective(
         vsm_matrix.number_of_columns, oracle_matrix.number_of_columns,
-        similarity_matrix, regularization_lambda)
+        similarity_matrix, 0.0) #regularization_lambda)
   else:
     ilp = RunIlp(vsm_matrix, oracle_matrix, regularization_lambda, 
                  distance_metric, optimization_direction)
