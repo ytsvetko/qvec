@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-./eval.py --in_vectors <filename> --oracle_vectors <filename>
+./eval.py --in_vectors <filename> --in_oracle <filename> --interpret
 
 """
 import argparse
@@ -15,11 +15,12 @@ import sys
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--in_vectors", default="../data/vectors/lsa_1b_100.txt")
-parser.add_argument("--oracle_vectors", default="../data/oracles/semcor_noun_verb.supersenses.filtered")
+parser.add_argument("--in_oracle", default="../data/oracles/semcor_noun_verb.supersenses.filtered")
 parser.add_argument("--distance_metric", default="abs_correlation",
                     help="correlation, abs_correlation, cosine, heuristic1")
 parser.add_argument("--interpret", action='store_true')
 parser.add_argument("--top", type=int, default=100)
+parser.add_argument("--verbose", action='store_true')
 args = parser.parse_args()
 
 
@@ -91,7 +92,8 @@ class OracleMatrix(Matrix):
           column_num = len(self.column_names)
           self.column_names.append(feature_name)
           self.number_of_columns += 1
-          print("  Added new oracle column:", feature_name, "at index", column_num )
+          if args.verbose:
+            print("  Added new oracle column:", feature_name, "at index", column_num )
         features[column_num] = feature_val
       self.matrix[word] = features
 
@@ -171,11 +173,13 @@ def main():
   distance_metric = args.distance_metric
 
   oracle_matrix = OracleMatrix()
-  print("Loading oracle matrix:", args.oracle_vectors)
-  oracle_matrix.AddMatrix(args.oracle_vectors)
+  if args.verbose:
+    print("Loading oracle matrix:", args.in_oracle)
+  oracle_matrix.AddMatrix(args.in_oracle)
 
   vsm_matrix = VectorMatrix()
-  print("Loading VSM file:", args.in_vectors)
+  if args.verbose:
+    print("Loading VSM file:", args.in_vectors)
   top_k = args.top if args.interpret else 0
   vsm_matrix.AddMatrix(args.in_vectors, top_k)
 
@@ -183,7 +187,7 @@ def main():
 
   print("Alignment score: %g" % score)
   if args.interpret:
-    print("\t".join(["Dimention", "Aligned oracle column", "Similarity", "Top-N words"]))
+    print("\t".join(["Dimension", "Aligned_oracle_column", "Similarity", "Top-N_words"]))
     for i in range(vsm_matrix.number_of_columns):
       top_words = []
       if vsm_matrix.best_in_column:
