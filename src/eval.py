@@ -16,8 +16,8 @@ import sys
 parser = argparse.ArgumentParser()
 parser.add_argument("--in_vectors", default="../data/vectors/lsa_1b_100.txt")
 parser.add_argument("--in_oracle", default="../data/oracles/semcor_noun_verb.supersenses.filtered")
-parser.add_argument("--distance_metric", default="abs_correlation",
-                    help="correlation, abs_correlation, cosine, heuristic1")
+parser.add_argument("--distance_metric", default="correlation",
+                    help="correlation, abs_correlation, cosine")
 parser.add_argument("--interpret", action='store_true')
 parser.add_argument("--top", type=int, default=100)
 parser.add_argument("--verbose", action='store_true')
