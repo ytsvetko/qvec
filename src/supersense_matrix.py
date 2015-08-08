@@ -3,7 +3,7 @@
 """
 ./supersense_matrix.py --out_file  <filename>
 
-./supersense_matrix.py --word_counter_threshold 5 --out_file ../data/oracles/semcor_noun_verb.supersenses.filtered
+./supersense_matrix.py --word_counter_threshold 5 --out_file oracles/semcor_noun_verb.supersenses
 
 """
 from __future__ import division
@@ -15,7 +15,7 @@ from nltk.corpus import semcor, wordnet as wn
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--word_counter_threshold", type=int, default=0, help="minimal number of occurrences in corpus")
-parser.add_argument("--out_file", default="../data/oracles/semcor_noun_verb.supersenses")
+parser.add_argument("--out_file", default="oracles/semcor_noun_verb.supersenses")
 args = parser.parse_args()
 
 class WordSupersenses(object):
