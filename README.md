@@ -1,8 +1,6 @@
 QVEC
 ========
 
-Intrincsic evaluation of word vectors representations by subspace alignment.
-
 <a href="http://www.cs.cmu.edu/~ytsvetko/papers/qvec.pdf">Evaluation of Word Vector Representations by Subspace Alignment</a>
   </li> 
 
