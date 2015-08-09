@@ -1,8 +1,6 @@
 QVEC
 ========
 
-Intrincsic evaluation of word vectors representations by subspace alignment.
-
 <a href="http://www.cs.cmu.edu/~ytsvetko/papers/qvec.pdf">Evaluation of Word Vector Representations by Subspace Alignment</a>
   </li> 
 
@@ -15,14 +13,14 @@ Intrincsic evaluation of word vectors representations by subspace alignment.
 To obtain vector column labels, add the --interpret parameter; to print top K values in each dimension add --top K: 
 
 ```py
-./eval.py --in_vectors ${your_vectors} --in_oracle semcor_noun_verb.supersenses --interpret --top 10
+./qvec.py --in_vectors ${your_vectors} --in_oracle oracles/semcor_noun_verb.supersenses --interpret --top 10
 ```
 
 
 #### Syntactic content evaluation: 
 
 ```py
-./qvec.py --in_vectors  ${your_vectors} --in_oracle  oracles/semcor_noun_verb.supersenses    
+./qvec.py --in_vectors  ${your_vectors} --in_oracle  oracles/ptb.pos_tags    
 ```
 
 
