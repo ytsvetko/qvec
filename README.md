@@ -20,7 +20,7 @@ To obtain vector column labels, add the --interpret parameter; to print top K va
 #### Syntactic content evaluation: 
 
 ```py
-./qvec.py --in_vectors  ${your_vectors} --in_oracle  oracles/semcor_noun_verb.supersenses    
+./qvec.py --in_vectors  ${your_vectors} --in_oracle  oracles/ptb.pos_tags    
 ```
 
 
