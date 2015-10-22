@@ -4,8 +4,10 @@ Yulia Tsvetkov, ytsvetko@cs.cmu.edu
 
 This is an easy-to-use, fast tool to measure the intrinsic quality of word vectors. The
 evaluation score depends on how well the word vector dimensions align to a matrix of features
-manually crafted from lexical resources. The evaluation measure is shown to correlate strongly
-with performance in downstream tasks (cf. Tsvetkov et al, 2015 for details and results).
+manually crafted from lexical resources. The evaluation score is shown to correlate strongly
+with performance in downstream tasks (cf. Tsvetkov et al, 2015 for details and results). QVEC
+is model agnostic and thus can be used for evaluating word vectors produced by any
+given model.
 
 <a href="http://www.cs.cmu.edu/~ytsvetko/papers/qvec.pdf">Evaluation of Word Vector Representations by Subspace Alignment</a>
   </li> 
