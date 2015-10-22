@@ -1,5 +1,11 @@
 QVEC
 ========
+Yulia Tsvetkov, ytsvetko@cs.cmu.edu
+
+This is an easy-to-use, fast tool to measure the intrinsic quality of word vectors. The
+evaluation score depends on how well the word vector dimensions align to a matrix of features
+manually crafted from lexical resources. The evaluation measure is shown to correlate strongly
+with performance in downstream tasks (cf. Tsvetkov et al, 2015 for details and results).
 
 <a href="http://www.cs.cmu.edu/~ytsvetko/papers/qvec.pdf">Evaluation of Word Vector Representations by Subspace Alignment</a>
   </li> 
@@ -22,8 +28,6 @@ To obtain vector column labels, add the --interpret parameter; to print top K va
 ```py
 ./qvec.py --in_vectors  ${your_vectors} --in_oracle  oracles/ptb.pos_tags    
 ```
-
-
 
 
 ### Citation:
