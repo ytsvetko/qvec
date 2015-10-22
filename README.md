@@ -11,6 +11,11 @@ with performance in downstream tasks (cf. Tsvetkov et al, 2015 for details and r
   </li> 
 
 ### Usage
+
+Each vector file should have one word vector per line as follows (space delimited):-
+
+```the -1.0 2.4 -0.3 ...```
+
 #### Semantic content evaluation: 
 
 ```py
