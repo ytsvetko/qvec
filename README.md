@@ -33,7 +33,7 @@ To obtain vector column labels, add the --interpret parameter; to print top K va
 
 ```py
 ./qvec_cca.py --in_vectors  ${your_vectors} --in_oracle   --in_oracle oracles/semcor_noun_verb.supersenses.en,oracles/semcor_noun_verb.supersenses.da 
-
+```
 
 #### Syntactic content evaluation: 
 
