@@ -15,7 +15,7 @@ import sys
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--in_vectors", default="vectors/w2v_sg_1b_100.txt")
-parser.add_argument("--in_oracle", default="oracles/semcor_noun_verb.supersenses")
+parser.add_argument("--in_oracle", default="oracles/semcor_noun_verb.supersenses.en", help="comma-separated list of linguistic annotation files, each is in format word \\t json dictionary of linguistic features")
 parser.add_argument("--distance_metric", default="correlation",
                     help="correlation, abs_correlation, cosine")
 parser.add_argument("--interpret", action='store_true')
@@ -175,9 +175,10 @@ def main():
   distance_metric = args.distance_metric
 
   oracle_matrix = OracleMatrix()
-  if args.verbose:
-    print("Loading oracle matrix:", args.in_oracle)
-  oracle_matrix.AddMatrix(args.in_oracle)
+  for filename in args.in_oracle.strip().split(","):
+    if args.verbose:
+      print("Loading oracle matrix:", filename)
+    oracle_matrix.AddMatrix(filename)
 
   vsm_matrix = VectorMatrix()
   if args.verbose:
