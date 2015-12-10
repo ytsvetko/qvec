@@ -3,8 +3,8 @@ QVEC
 Yulia Tsvetkov, ytsvetko@cs.cmu.edu
 
 This is an easy-to-use, fast tool to measure the intrinsic quality of word vectors. The
-evaluation score depends on how well the word vector dimensions align to a matrix of features
-manually crafted from lexical resources. The evaluation score is shown to correlate strongly
+evaluation score depends on how well the word vectors correlate with a matrix of features
+from manually crafted lexical resources. The evaluation score is shown to correlate strongly
 with performance in downstream tasks (cf. Tsvetkov et al, 2015 for details and results). QVEC
 is model agnostic and thus can be used for evaluating word vectors produced by any
 given model.
@@ -21,14 +21,18 @@ Each vector file should have one word vector per line as follows (space delimite
 #### Semantic content evaluation: 
 
 ```py
-./qvec.py --in_vectors  ${your_vectors} --in_oracle  oracles/semcor_noun_verb.supersenses    
+./qvec.py --in_vectors  ${your_vectors} --in_oracle  oracles/semcor_noun_verb.supersenses.en    
 ```
 To obtain vector column labels, add the --interpret parameter; to print top K values in each dimension add --top K: 
 
 ```py
-./qvec.py --in_vectors ${your_vectors} --in_oracle oracles/semcor_noun_verb.supersenses --interpret --top 10
+./qvec.py --in_vectors ${your_vectors} --in_oracle oracles/semcor_noun_verb.supersenses.en --interpret --top 10
 ```
 
+#### Multilingual evaluation for English, Danish, and Italian: 
+
+```py
+./qvec_cca.py --in_vectors  ${your_vectors} --in_oracle   --in_oracle oracles/semcor_noun_verb.supersenses.en,oracles/semcor_noun_verb.supersenses.da 
 
 #### Syntactic content evaluation: 
 
@@ -42,6 +46,8 @@ To obtain vector column labels, add the --interpret parameter; to print top K va
     author = {Tsvetkov, Yulia and Faruqui, Manaal and Ling, Wang and Lample, Guillaume and Dyer, Chris},
     title={Evaluation of Word Vector Representations by Subspace Alignment},
     booktitle={Proc. of EMNLP},
+
+
     year={2015},
     }
 
