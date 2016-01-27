@@ -11,5 +11,6 @@ Y = normr(Y);
 score = mean(r);
 
 fprintf('QVEC score: %f\n',score);
-exit
+
+quit
 

@@ -10,6 +10,7 @@ import json
 import gzip
 import sys
 import subprocess
+import os
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--in_vectors", default="vectors/w2v_sg_1b_100.txt")
@@ -129,7 +130,7 @@ def WriteMatrix(matrix, filename):
   for row in matrix:
     f_out.write("{}\n".format(" ".join([str(val) for val in row])))
 
-def main():
+def main(pwd):
   oracle_files = args.in_oracle.strip().split(",")
   vocab_oracle = GetVocab(oracle_files, vocab_union=True)
   vocab_vectors = GetVocab([args.in_vectors])
@@ -153,7 +154,7 @@ def main():
   WriteMatrix(vsm_matrix, "X")
   WriteMatrix(oracle_matrix, "Y")
 
-  subprocess.call(["matlab -nosplash -nodisplay -r \"cca(\'%s\',\'%s\')\"" % ("X", "Y")],shell=True)
+  subprocess.call(["matlab -nosplash -nodisplay -r \"cca(\'%s\',\'%s\')\"" % ("X", "Y")], cwd=os.path.dirname(pwd)+"/", shell=True)
 
 if __name__ == '__main__':
-  main()
+  main(sys.argv[0])
