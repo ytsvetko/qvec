@@ -200,7 +200,8 @@ def main():
           oracle_matrix.column_names[alignments[i][0]],
           alignments[i][1],
           " ".join(top_words)))
-  print("Computation time: ", time.time() - start)
+  if args.verbose:
+    print("Computation time: ", time.time() - start)
 
 if __name__ == '__main__':
   main()
