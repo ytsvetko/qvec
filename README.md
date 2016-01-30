@@ -21,7 +21,7 @@ Each vector file should have one word vector per line as follows (space delimite
 #### Semantic content evaluation: 
 
 ```py
-./qvec.py --in_vectors  ${your_vectors} --in_oracle  oracles/semcor_noun_verb.supersenses.en    
+./qvec_cca.py --in_vectors  ${your_vectors} --in_oracle  oracles/semcor_noun_verb.supersenses.en    
 ```
 To obtain vector column labels, add the --interpret parameter; to print top K values in each dimension add --top K: 
 
@@ -38,7 +38,7 @@ To obtain vector column labels, add the --interpret parameter; to print top K va
 #### Syntactic content evaluation: 
 
 ```py
-./qvec.py --in_vectors  ${your_vectors} --in_oracle  oracles/ptb.pos_tags    
+./qvec_cca.py --in_vectors  ${your_vectors} --in_oracle  oracles/ptb.pos_tags    
 ```
 
 
@@ -47,8 +47,6 @@ To obtain vector column labels, add the --interpret parameter; to print top K va
     author = {Tsvetkov, Yulia and Faruqui, Manaal and Ling, Wang and Lample, Guillaume and Dyer, Chris},
     title={Evaluation of Word Vector Representations by Subspace Alignment},
     booktitle={Proc. of EMNLP},
-
-
     year={2015},
     }
 
