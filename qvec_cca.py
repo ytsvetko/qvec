@@ -11,6 +11,11 @@ import gzip
 import sys
 import subprocess
 import os
+import numpy as np
+import scipy
+from scipy import linalg
+from scipy.linalg import decomp_qr
+from sklearn import preprocessing
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--in_vectors", default="vectors/w2v_sg_1b_100.txt")
@@ -48,49 +53,42 @@ def GetVocab(file_list, vocab_union=False):
       else: #intersection
         vocab = vocab & vocab_f 
   return sorted(vocab)
-  
-def ReadOracleMatrix(filename, vocab, column_names=None, matrix=None):
-  #filename format: headache  {"WN_noun.cognition": 0.5, "WN_noun.state": 0.5}
-  vocab_set = set(vocab)
-  if not column_names:
-    column_names = []
-    matrix = {}
-      
-  for line in open(filename):
-    word, json_line = line.strip().split("\t")
-    if word not in vocab_set:
-      continue
-    json_features = json.loads(json_line)
-    features = {}  
-    for feature_name, feature_val in json_features.items():
-      if feature_name in column_names:
-        column_num = column_names.index(feature_name)
-      else:
-        column_num = len(column_names)
-        column_names.append(feature_name)
-        if args.verbose:
-          print("  Added new oracle column:", feature_name, "at index", column_num)
-      features[column_num] = feature_val
+
+def ReadOracleMatrix(filenames, vocab_set):
+  column_names = set()
+  matrix = {}
+  for filename in filenames:
+    # file format: headache  {"WN_noun.cognition": 0.5, "WN_noun.state": 0.5}
+    if args.verbose:
+      print("Loading oracle matrix:", filename)    
+
+    for line in open(filename):
+      word, json_line = line.strip().split("\t")
+      if word not in vocab_set:
+        continue
+      features = json.loads(json_line)
+      column_names.update(features.keys())     
       if word not in matrix:
         matrix[word] = features
       else:
         prev_features = matrix[word]
         matrix[word] = combine_dicts(features, prev_features)
-  result = []
-  number_of_columns = len(column_names)
 
-  for row_num, word in enumerate(vocab):
-    if word in matrix:
-      row = [0] * number_of_columns
-      for col_num, col_val in matrix[word].items():
-        row[col_num] = col_val
-      result.append(row)
-  return result, column_names, matrix
+  if args.verbose:
+   print("Number of oracle features:", len(column_names))
+
+  column_name_dict = {feature_name:index for index, feature_name in enumerate(sorted(column_names))}
+
+  result = np.zeros((len(vocab_set), len(column_names)))
+  for row_num, word in enumerate(sorted(vocab_set)):
+    for feature_name, feature_val in matrix[word].items():
+      result[row_num, column_name_dict[feature_name]] = feature_val
+  return result
   
 def combine_dicts(A, B):
   return {x: A.get(x, 0) + B.get(x, 0) for x in set(A).union(B)}
         
-def ReadVectorMatrix(filename, vocab):
+def ReadVectorMatrix(filename, vocab_set):
   #filename format: biennials -0.11809 0.089522 -0.026722 0.075579 -0.02453
   binary_file = False
   if filename.endswith(".gz"):
@@ -100,7 +98,6 @@ def ReadVectorMatrix(filename, vocab):
     f = open(filename)
 
   matrix = {}
-  vocab_set = set(vocab)
   for line in f:
     tokens = line.strip().split()
     if len(tokens) <= 2: #ignore w2v first line
@@ -120,41 +117,52 @@ def ReadVectorMatrix(filename, vocab):
     matrix[word] = features
     
   result = []
-  for word in vocab:
+  for word in sorted(vocab_set):
     assert word in matrix, word
     result.append(matrix[word])
-  return result
+  return np.array(result)
 
-def WriteMatrix(matrix, filename):
-  f_out = open(filename, "w")
-  for row in matrix:
-    f_out.write("{}\n".format(" ".join([str(val) for val in row])))
+def NormCenterMatrix(M):
+  M = preprocessing.normalize(M)
+  m_mean = M.mean(axis=0)
+  M -= m_mean
+  return M
 
-def main(pwd):
+def ComputeCCA(X, Y):
+  assert X.shape[0] == Y.shape[0], (X.shape, Y.shape, "Unequal number of rows")
+  assert X.shape[0] > 1, (X.shape, "Must have more than 1 row")
+  
+  X = NormCenterMatrix(X)
+  Y = NormCenterMatrix(Y)
+  X_q, _, _ = decomp_qr.qr(X, overwrite_a=True, mode='economic', pivoting=True)
+  Y_q, _, _ = decomp_qr.qr(Y, overwrite_a=True, mode='economic', pivoting=True)
+  C = np.dot(X_q.T, Y_q)
+  r = linalg.svd(C, full_matrices=False, compute_uv=False)
+  d = min(X.shape[1], Y.shape[1])
+  r = r[:d]
+  r = np.minimum(np.maximum(r, 0.0), 1.0)  # remove roundoff errs
+  return r.mean()
+
+def main():
   oracle_files = args.in_oracle.strip().split(",")
   vocab_oracle = GetVocab(oracle_files, vocab_union=True)
   vocab_vectors = GetVocab([args.in_vectors])
-  vocab = sorted(set(vocab_vectors) & set(vocab_oracle))
-  if len(vocab) < 1000:
+  vocab_set = set(vocab_vectors) & set(vocab_oracle)
+  if len(vocab_set) < 1000:
     print("*** Warning: vocabulary size is too small. ***")
   if args.verbose:
-    print("Vocabulary size:", len(vocab))
+    print("Vocabulary size:", len(vocab_set))
   
-  column_names, tmp_matrix = None, None
-  for filename in oracle_files:
-    if args.verbose:
-      print("Loading oracle matrix:", filename)
-    oracle_matrix, column_names, tmp_matrix = ReadOracleMatrix(
-         filename, vocab, column_names, tmp_matrix)
+  oracle_matrix = ReadOracleMatrix(oracle_files, vocab_set)
 
   if args.verbose:
     print("Loading VSM file:", args.in_vectors)
-  vsm_matrix = ReadVectorMatrix(args.in_vectors, vocab)
-
-  WriteMatrix(vsm_matrix, "X")
-  WriteMatrix(oracle_matrix, "Y")
-
-  subprocess.call(["matlab -nosplash -nodisplay -r \"cca(\'%s\',\'%s\')\"" % ("X", "Y")], cwd=os.path.dirname(pwd)+"/", shell=True)
-
+  vsm_matrix = ReadVectorMatrix(args.in_vectors, vocab_set)
+  
+  if args.verbose:
+    print("Running CCA")
+  cca_result = ComputeCCA(vsm_matrix, oracle_matrix)
+  print("QVEC_CCA score: %g" % cca_result)
+  
 if __name__ == '__main__':
-  main(sys.argv[0])
+  main()
